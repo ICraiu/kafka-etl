@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.annotation.StreamListener;
 import org.springframework.cloud.stream.messaging.Processor;
+import org.springframework.messaging.Message;
 import org.springframework.messaging.handler.annotation.SendTo;
+import org.springframework.messaging.support.MessageBuilder;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -19,18 +21,25 @@ public class StangingTransactionProcessor {
     @Autowired
     private CardHolderRepository cardHolderRepository;
 
+    @Autowired
+    private Processor processor;
+
     @StreamListener(Processor.INPUT)
-    @SendTo(Processor.OUTPUT)
-    public List<Transaction> enrichStagingTransction(List<StagingTransactionEntity> stagingTransactionEntityList) {
-        return stagingTransactionEntityList.stream().map(e -> {
+    public void enrichStagingTransction(List<StagingTransactionEntity> stagingTransactionEntityList) {
+        stagingTransactionEntityList.stream().forEach(e -> {
             CardHolderEntity cardHolderEntity = cardHolderRepository.getCardHolderByCardNumber(e.getCardNumber());
-            return Transaction.builder()
+            Transaction transaction = Transaction.builder()
                     .name(cardHolderEntity.getName())
                     .surname(cardHolderEntity.getSurname())
                     .currency(e.getCurrency())
                     .date(e.getDate())
                     .transactionValue(e.getTransactionValue()).build();
-        }).collect(Collectors.toList());
+            sendTransaction(transaction);
+        });
+    }
+
+    private void sendTransaction(Transaction transaction) {
+        processor.output().send(MessageBuilder.withPayload(transaction).build());
     }
 
 }
